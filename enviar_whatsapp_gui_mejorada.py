@@ -4,15 +4,46 @@ import pywhatkit as kit
 import pyautogui
 import time
 import threading
-from PIL import Image, ImageTk
 import io
+import sys
+import os
+import webbrowser
+import urllib.request
+import json
+from datetime import datetime
+import platform
 
 class ModernWhatsAppGUI:
+    VERSION = "2.1.0"
+    UPDATE_URL = "https://raw.githubusercontent.com/luigi123-bot/whats/main/version.json"
+    REPO_URL = "https://github.com/luigi123-bot/whats"
+    
     def __init__(self, root):
         self.root = root
-        self.root.title("📱 WhatsApp Messenger - Envío Masivo")
-        self.root.geometry("900x700")
+        self.root.title(f"📱 WhatsApp Messenger Pro v{self.VERSION} - Envío Masivo")
+        
+        # Detectar sistema operativo y ajustar tamaño
+        self.os_type = platform.system()
+        if self.os_type == "Windows":
+            self.root.geometry("950x750")
+        elif self.os_type == "Darwin":  # macOS
+            self.root.geometry("950x800")
+        else:  # Linux y otros
+            self.root.geometry("950x750")
+        
         self.root.resizable(True, True)
+        
+        # Configurar ícono si existe
+        try:
+            if getattr(sys, 'frozen', False):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(os.path.abspath(__file__))
+            icon_path = os.path.join(base_path, 'icon.ico')
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+        except:
+            pass
         
         # Configurar estilo
         self.setup_styles()
@@ -22,35 +53,41 @@ class ModernWhatsAppGUI:
         
         # Crear GUI principal
         self.create_main_interface()
+        
+        # Verificar actualizaciones al iniciar (en segundo plano)
+        threading.Thread(target=self.check_for_updates, daemon=True).start()
     
     def setup_styles(self):
         """Configurar estilos y colores"""
         self.root.configure(bg="#0f1419")
         
-        # Colores del tema
-        self.bg_dark = "#0f1419"
-        self.bg_card = "#1e1f26"
-        self.bg_hover = "#2a2c34"
-        self.text_primary = "#ffffff"
-        self.text_secondary = "#a0a3a8"
+        # Colores del tema moderno
+        self.bg_dark = "#0d1117"
+        self.bg_card = "#161b22"
+        self.bg_hover = "#21262d"
+        self.text_primary = "#f0f6fc"
+        self.text_secondary = "#8b949e"
         self.accent_green = "#25d366"
-        self.accent_blue = "#0078d4"
-        self.accent_red = "#ff3b30"
-        self.accent_yellow = "#ffa500"
+        self.accent_blue = "#58a6ff"
+        self.accent_red = "#f85149"
+        self.accent_yellow = "#ffc107"
+        self.border_color = "#30363d"
         
         # Configurar tema
         style = ttk.Style()
         style.theme_use('clam')
         
-        # Colores base
+        # Colores base mejorados
         style.configure("TFrame", background=self.bg_dark)
-        style.configure("TLabel", background=self.bg_dark, foreground=self.text_primary)
-        style.configure("TButton", background=self.bg_card, foreground=self.text_primary)
-        style.configure("Card.TFrame", background=self.bg_card, relief="flat")
+        style.configure("TLabel", background=self.bg_dark, foreground=self.text_primary, 
+                       font=("Segoe UI", 9))
+        style.configure("Card.TFrame", background=self.bg_card, relief="solid", borderwidth=1)
         
-        # Estilos personalizados para botones
-        style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"))
-        style.configure("Secondary.TButton", font=("Segoe UI", 9))
+        # Estilos personalizados para botones mejorados
+        style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"),
+                       background=self.accent_green, foreground="white")
+        style.configure("Secondary.TButton", font=("Segoe UI", 9),
+                       background=self.bg_card, foreground=self.text_primary)
     
     def create_main_interface(self):
         """Crear interfaz principal"""
@@ -76,22 +113,53 @@ class ModernWhatsAppGUI:
         self.create_log_section(right_column)
     
     def create_header(self):
-        """Crear encabezado"""
-        header = ttk.Frame(self.root)
+        """Crear encabezado mejorado"""
+        header = ttk.Frame(self.root, style="Card.TFrame")
         header.pack(fill="x", padx=15, pady=(15, 10))
         
-        title_frame = ttk.Frame(header)
-        title_frame.pack(fill="x")
+        # Container interno con padding
+        container = ttk.Frame(header)
+        container.pack(fill="x", padx=20, pady=15)
         
         # Emoji + Título
-        title_label = ttk.Label(title_frame, text="📱 WhatsApp Messenger", 
-                               font=("Segoe UI", 24, "bold"), foreground=self.accent_green)
+        title_label = ttk.Label(container, text="📱 WhatsApp Messenger Pro", 
+                               font=("Segoe UI", 26, "bold"), foreground=self.accent_green)
         title_label.pack(side="left", padx=0)
         
-        # Subtítulo
-        subtitle = ttk.Label(header, text="Envía mensajes masivos de forma fácil y rápida", 
+        # Badge de versión
+        version_label = tk.Label(container, text=f"v{self.VERSION}", 
+                                font=("Segoe UI", 9, "bold"), 
+                                bg=self.accent_blue, fg="white",
+                                padx=8, pady=3, relief="flat")
+        version_label.pack(side="left", padx=10)
+        
+        # Botón de actualización
+        self.btn_update = tk.Button(container, text="🔄", 
+                                    command=self.manual_check_update,
+                                    font=("Segoe UI", 11), 
+                                    bg=self.bg_card, fg=self.text_secondary,
+                                    relief="flat", cursor="hand2",
+                                    padx=6, pady=2, borderwidth=0)
+        self.btn_update.pack(side="left", padx=5)
+        
+        # Efecto hover
+        self.btn_update.bind("<Enter>", lambda e: self.btn_update.config(bg=self.bg_hover))
+        self.btn_update.bind("<Leave>", lambda e: self.btn_update.config(bg=self.bg_card))
+        
+        # Info del sistema
+        os_info = f"{self.os_type}"
+        system_label = ttk.Label(container, text=f"[{os_info}]", 
+                                font=("Segoe UI", 8), foreground=self.text_secondary)
+        system_label.pack(side="right", padx=0)
+        
+        # Subtítulo en nueva línea
+        subtitle_frame = ttk.Frame(header)
+        subtitle_frame.pack(fill="x", padx=20, pady=(0, 15))
+        
+        subtitle = ttk.Label(subtitle_frame, 
+                            text="✨ Envía mensajes masivos de forma profesional y rápida | Compatible con PC y móviles", 
                             font=("Segoe UI", 10), foreground=self.text_secondary)
-        subtitle.pack(side="left", anchor="w", padx=0, pady=(10, 0))
+        subtitle.pack(side="left", anchor="w")
     
     def create_numbers_section(self, parent):
         """Sección de números"""
@@ -107,15 +175,16 @@ class ModernWhatsAppGUI:
                          font=("Segoe UI", 12, "bold"), foreground=self.accent_blue)
         title.pack(anchor="w")
         
-        info = ttk.Label(title_frame, text="Ingresa los números separados por saltos de línea (sin +)", 
+        info = ttk.Label(title_frame, text="Ingresa los números separados por saltos de línea (formato internacional)", 
                         font=("Segoe UI", 8), foreground=self.text_secondary)
         info.pack(anchor="w", padx=0, pady=(5, 0))
         
-        # Text widget
+        # Text widget con estilo mejorado
         self.text_numbers = scrolledtext.ScrolledText(
             card, height=8, width=40, wrap=tk.WORD,
             bg=self.bg_dark, fg=self.text_primary, insertbackground=self.accent_green,
-            font=("Consolas", 9), relief="solid", borderwidth=1
+            font=("Consolas", 10), relief="solid", borderwidth=1,
+            selectbackground=self.accent_blue, selectforeground="white"
         )
         self.text_numbers.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         
@@ -165,11 +234,12 @@ class ModernWhatsAppGUI:
                         font=("Segoe UI", 8), foreground=self.text_secondary)
         info.pack(anchor="w", padx=0, pady=(5, 0))
         
-        # Text widget
+        # Text widget con estilo mejorado
         self.text_message = scrolledtext.ScrolledText(
             card, height=12, width=40, wrap=tk.WORD,
             bg=self.bg_dark, fg=self.text_primary, insertbackground=self.accent_green,
-            font=("Segoe UI", 9), relief="solid", borderwidth=1
+            font=("Segoe UI", 10), relief="solid", borderwidth=1,
+            selectbackground=self.accent_blue, selectforeground="white"
         )
         self.text_message.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         
@@ -216,6 +286,18 @@ Comunícate: 302 5270747"""
                          font=("Segoe UI", 12, "bold"), foreground=self.accent_blue)
         title.pack(anchor="w", padx=15, pady=(15, 10))
         
+        # Selector de código de país
+        frame0 = ttk.Frame(card)
+        frame0.pack(fill="x", padx=15, pady=7)
+        
+        ttk.Label(frame0, text="Código de país:", font=("Segoe UI", 9)).pack(side="left")
+        self.var_country_code = tk.StringVar(value="57")
+        country_combo = ttk.Combobox(frame0, textvariable=self.var_country_code, 
+                                     values=["1", "52", "54", "55", "56", "57", "58", "502", "503", "504", "505", "506", "507", "509", "591", "593", "595"], 
+                                     width=8, state="readonly")
+        country_combo.pack(side="right")
+        country_combo.set("57")  # Colombia por defecto
+        
         # Tiempo de espera entre mensajes
         frame1 = ttk.Frame(card)
         frame1.pack(fill="x", padx=15, pady=7)
@@ -234,11 +316,19 @@ Comunícate: 302 5270747"""
         
         # Cerrar pestaña
         frame3 = ttk.Frame(card)
-        frame3.pack(fill="x", padx=15, pady=10)
+        frame3.pack(fill="x", padx=15, pady=7)
         
         self.var_tab_close = tk.BooleanVar(value=True)
         ttk.Checkbutton(frame3, text="Cerrar pestaña automáticamente", 
                        variable=self.var_tab_close).pack(anchor="w")
+        
+        # Modo móvil
+        frame4 = ttk.Frame(card)
+        frame4.pack(fill="x", padx=15, pady=7)
+        
+        self.var_mobile_mode = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame4, text="Modo WhatsApp móvil/escritorio", 
+                       variable=self.var_mobile_mode).pack(anchor="w")
         
         ttk.Separator(card, orient="horizontal").pack(fill="x", padx=15, pady=(10, 0))
     
@@ -253,11 +343,12 @@ Comunícate: 302 5270747"""
                          font=("Segoe UI", 12, "bold"), foreground=self.accent_blue)
         title.pack(anchor="w", padx=15, pady=(15, 10))
         
-        # Text widget
+        # Text widget con estilo mejorado
         self.text_log = scrolledtext.ScrolledText(
             card, height=15, width=35, wrap=tk.WORD,
             bg=self.bg_dark, fg=self.text_primary, insertbackground=self.accent_green,
-            font=("Consolas", 8), relief="solid", borderwidth=1
+            font=("Consolas", 9), relief="solid", borderwidth=1,
+            selectbackground=self.accent_blue, selectforeground="white"
         )
         self.text_log.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         
@@ -271,29 +362,44 @@ Comunícate: 302 5270747"""
         btn_frame = ttk.Frame(card)
         btn_frame.pack(fill="x", padx=15, pady=(0, 15))
         
-        # Botón Enviar
+        # Botón Enviar con estilo mejorado
         self.btn_send = tk.Button(btn_frame, text="▶️ INICIAR ENVÍO", 
                                   command=self.start_sending, font=("Segoe UI", 11, "bold"),
                                   bg=self.accent_green, fg="#000000", relief="flat",
                                   activebackground="#1fb854", activeforeground="#000000",
-                                  cursor="hand2", padx=20, pady=10)
+                                  cursor="hand2", padx=20, pady=12, 
+                                  borderwidth=0, highlightthickness=0)
         self.btn_send.pack(side="left", padx=(0, 5), fill="x", expand=True)
         
-        # Botón Detener
+        # Efecto hover para botón enviar
+        self.btn_send.bind("<Enter>", lambda e: self.btn_send.config(bg="#1fb854"))
+        self.btn_send.bind("<Leave>", lambda e: self.btn_send.config(bg=self.accent_green))
+        
+        # Botón Detener con estilo mejorado
         self.btn_stop = tk.Button(btn_frame, text="⏹️ DETENER", 
                                  command=self.stop_sending, font=("Segoe UI", 11, "bold"),
                                  bg=self.accent_red, fg="#ffffff", relief="flat", state="disabled",
                                  activebackground="#cc2f24", activeforeground="#ffffff",
-                                 cursor="hand2", padx=20, pady=10)
+                                 cursor="hand2", padx=20, pady=12,
+                                 borderwidth=0, highlightthickness=0)
         self.btn_stop.pack(side="left", padx=5, fill="x", expand=True)
         
-        # Botón Limpiar Log
+        # Efecto hover para botón detener
+        self.btn_stop.bind("<Enter>", lambda e: self.btn_stop.config(bg="#cc2f24") if self.btn_stop['state'] == 'normal' else None)
+        self.btn_stop.bind("<Leave>", lambda e: self.btn_stop.config(bg=self.accent_red) if self.btn_stop['state'] == 'normal' else None)
+        
+        # Botón Limpiar Log con estilo mejorado
         btn_clear_log = tk.Button(btn_frame, text="🗑️", 
                                  command=lambda: self.text_log.delete("1.0", tk.END),
-                                 font=("Segoe UI", 10), bg=self.bg_card, fg=self.text_secondary,
+                                 font=("Segoe UI", 11), bg=self.bg_card, fg=self.text_secondary,
                                  relief="flat", activebackground=self.bg_hover,
-                                 cursor="hand2", width=3, pady=8)
+                                 cursor="hand2", width=3, pady=10,
+                                 borderwidth=0, highlightthickness=0)
         btn_clear_log.pack(side="left", padx=5)
+        
+        # Efecto hover para botón limpiar
+        btn_clear_log.bind("<Enter>", lambda e: btn_clear_log.config(bg=self.bg_hover))
+        btn_clear_log.bind("<Leave>", lambda e: btn_clear_log.config(bg=self.bg_card))
         
         # Estado
         self.label_status = ttk.Label(card, text="🟢 Listo", 
@@ -339,10 +445,11 @@ Comunícate: 302 5270747"""
             messagebox.showwarning("Advertencia", "No hay números para limpiar.")
             return
         
+        country_code = self.var_country_code.get()
+        
         # Procesar números
         cleaned_numbers = []
         for line in numbers_text.split('\n'):
-            # Limpiar espacios en blanco
             number = line.strip()
             
             if not number:
@@ -350,38 +457,35 @@ Comunícate: 302 5270747"""
             
             # Remover caracteres especiales comunes
             number = number.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-            number = number.replace('+', '')  # Remover + si existe
+            number = number.replace('+', '')
             
-            # Remover 0 al inicio si existe (para números colombianos)
+            # Remover 0 al inicio si existe
             if number.startswith('0'):
                 number = number[1:]
             
             # Agregar código de país si no lo tiene
-            if not number.startswith('57'):
-                number = '57' + number
+            if not number.startswith(country_code):
+                number = country_code + number
             
-            # Solo agregar si tiene una longitud razonable
-            if len(number) >= 10:  # Mínimo para un número colombiano
+            # Validar longitud mínima
+            if len(number) >= 10:
                 cleaned_numbers.append(number)
         
         if cleaned_numbers:
-            # Mostrar números limpios en el text widget
             self.text_numbers.delete("1.0", tk.END)
             cleaned_text = '\n'.join(cleaned_numbers)
             self.text_numbers.insert("1.0", cleaned_text)
             
-            # Actualizar contador
             self.update_numbers_count()
             
-            # Log
             duplicados_removidos = len(numbers_text.split('\n')) - len(cleaned_numbers)
-            self.log_message(f"✅ Números limpios: {len(cleaned_numbers)}", "success")
+            self.log_message(f"OK Números limpios: {len(cleaned_numbers)}", "success")
             if duplicados_removidos > 0:
-                self.log_message(f"   📍 Se removieron {duplicados_removidos} líneas vacías/inválidas", "warning")
-            self.log_message(f"   ✓ Código de país (+57) agregado", "success")
+                self.log_message(f"   INFO Se removieron {duplicados_removidos} líneas vacías/inválidas", "warning")
+            self.log_message(f"   OK Código de país (+{country_code}) agregado", "success")
         else:
             messagebox.showwarning("Advertencia", "No se encontraron números válidos para limpiar.")
-            self.log_message("❌ No se encontraron números válidos", "error")
+            self.log_message("X No se encontraron números válidos", "error")
     
     def log_message(self, message, tag="info"):
         """Agregar mensaje al log"""
@@ -509,6 +613,75 @@ Comunícate: 302 5270747"""
             self.text_numbers.config(state="normal")
             self.text_message.config(state="normal")
             self.enviando = False
+
+    def check_for_updates(self):
+        """Verificar actualizaciones disponibles"""
+        try:
+            # Intentar obtener la versión más reciente del repositorio
+            with urllib.request.urlopen(self.UPDATE_URL, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                latest_version = data.get('version', self.VERSION)
+                update_notes = data.get('notes', '')
+                
+                if self.compare_versions(latest_version, self.VERSION):
+                    # Hay una nueva versión disponible
+                    self.root.after(2000, lambda: self.show_update_notification(latest_version, update_notes))
+        except Exception as e:
+            # Si falla, no mostrar nada (actualización en segundo plano)
+            pass
+    
+    def compare_versions(self, version1, version2):
+        """Comparar dos versiones (formato X.Y.Z)"""
+        try:
+            v1_parts = [int(x) for x in version1.split('.')]
+            v2_parts = [int(x) for x in version2.split('.')]
+            
+            for i in range(max(len(v1_parts), len(v2_parts))):
+                v1 = v1_parts[i] if i < len(v1_parts) else 0
+                v2 = v2_parts[i] if i < len(v2_parts) else 0
+                if v1 > v2:
+                    return True
+                elif v1 < v2:
+                    return False
+            return False
+        except:
+            return False
+    
+    def show_update_notification(self, latest_version, notes):
+        """Mostrar notificación de actualización disponible"""
+        response = messagebox.askyesno(
+            "Actualización Disponible",
+            f"Nueva versión disponible: v{latest_version}\n\n"
+            f"Versión actual: v{self.VERSION}\n\n"
+            f"Notas de la actualización:\n{notes}\n\n"
+            "¿Deseas ir a la página de descargas?"
+        )
+        if response:
+            webbrowser.open(f"{self.REPO_URL}/releases")
+    
+    def manual_check_update(self):
+        """Verificación manual de actualizaciones"""
+        self.btn_update.config(text="⏳")
+        try:
+            with urllib.request.urlopen(self.UPDATE_URL, timeout=10) as response:
+                data = json.loads(response.read().decode())
+                latest_version = data.get('version', self.VERSION)
+                update_notes = data.get('notes', '')
+                
+                if self.compare_versions(latest_version, self.VERSION):
+                    self.show_update_notification(latest_version, update_notes)
+                else:
+                    messagebox.showinfo(
+                        "Actualización",
+                        f"¡Estás usando la versión más reciente!\n\nVersión actual: v{self.VERSION}"
+                    )
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                f"No se pudo verificar actualizaciones.\n\nError: {str(e)}\n\nVerifica tu conexión a internet."
+            )
+        finally:
+            self.btn_update.config(text="🔄")
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -1,0 +1,6 @@
+{
+  "version": "2.1.0",
+  "release_date": "2025-12-04",
+  "notes": "✨ Nuevo en v2.1.0:\n• Soporte multi-país con selector de código\n• Compatible con PC y móviles\n• Sistema de actualización automática\n• Detección automática del sistema operativo\n• Mejoras en la interfaz gráfica\n• Optimizaciones de rendimiento",
+  "download_url": "https://github.com/luigi123-bot/whats/releases/latest"
+}
